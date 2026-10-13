@@ -356,6 +356,12 @@ func (m *model) refresh() {
 		case sortSize:
 			return a.Size > b.Size
 		case sortModified:
+			if a.Measured != b.Measured {
+				return a.Measured
+			}
+			if !a.Measured {
+				return false
+			}
 			return a.Modified.Before(b.Modified)
 		}
 		return a.Repo < b.Repo
