@@ -6,9 +6,17 @@ A terminal tool that scans a directory for git repositories, lists every worktre
 
 - macOS or Linux
 - Git 2.41 or newer on your `PATH` (merge detection uses the `%(ahead-behind:...)` atom of `git for-each-ref`)
-- Go 1.27 or newer, only to build. The resulting binary has no runtime dependency besides Git.
+- Go 1.27 or newer, only to build from source. The resulting binary has no runtime dependency besides Git.
 
 ## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/gsevla/bonsai/main/install.sh | sh
+```
+
+This downloads the latest release for your OS and architecture, verifies its checksum and puts `bonsai` in `~/.local/bin`, which must be on your `PATH`. Set `BONSAI_INSTALL_DIR` to install somewhere else.
+
+### From source
 
 ```bash
 go install .
@@ -81,3 +89,5 @@ The base branch is `origin/HEAD` when it is set, otherwise `main` or `master`. A
 ```bash
 go test ./...
 ```
+
+Pushing a `v*` tag runs GoReleaser in GitHub Actions and publishes the binaries that `install.sh` downloads.
