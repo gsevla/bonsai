@@ -85,6 +85,7 @@ func Run(opts Options) error {
 	m := model{
 		opts:     opts,
 		selected: map[*scan.Worktree]bool{},
+		sort:     sortSize,
 		limit:    make(chan struct{}, runtime.NumCPU()),
 	}
 	_, err := tea.NewProgram(m).Run()
