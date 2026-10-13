@@ -50,7 +50,7 @@ func fixture(t *testing.T) (string, map[string]*Worktree) {
 	run(t, repo, "worktree", "add", "-b", "feat/dirty", dirty)
 	write(t, filepath.Join(dirty, "untracked"))
 
-	list, err := Discover(root, 5)
+	list, err := Discover(root, 5, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestDiscover(t *testing.T) {
 
 func TestDepthLimit(t *testing.T) {
 	root, _ := fixture(t)
-	list, err := Discover(root, 1)
+	list, err := Discover(root, 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestRemove(t *testing.T) {
 	if err := Remove(missing); err != nil {
 		t.Fatalf("remove missing worktree: %v", err)
 	}
-	list, err := Discover(root, 5)
+	list, err := Discover(root, 5, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestBareLayout(t *testing.T) {
 	run(t, hub, "--git-dir=.bare", "worktree", "add", filepath.Join(hub, "main"), "main")
 	run(t, hub, "--git-dir=.bare", "worktree", "add", filepath.Join(hub, "ahead"), "feat/ahead")
 
-	list, err := Discover(hub, 5)
+	list, err := Discover(hub, 5, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,5 +149,66 @@ func TestBareLayout(t *testing.T) {
 	}
 	if w := found["feat/ahead"]; w == nil || w.Protected() || w.Merged {
 		t.Errorf("unexpected linked worktree: %+v", w)
+	}
+}
+
+func TestFetchUpdatesRemoteRefs(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	origin := filepath.Join(root, "origin")
+	clone := filepath.Join(root, "work", "clone")
+	for _, dir := range []string{origin, filepath.Dir(clone)} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run(t, origin, "init", "-b", "main")
+	write(t, filepath.Join(origin, "readme"))
+	run(t, origin, "add", ".")
+	run(t, origin, "commit", "-m", "first")
+	run(t, filepath.Dir(clone), "clone", origin, clone)
+	run(t, origin, "checkout", "-b", "other")
+	run(t, origin, "checkout", "main")
+
+	for _, fetch := range []bool{false, true} {
+		list, err := Discover(filepath.Dir(clone), 3, fetch)
+		if err != nil || len(list) != 1 {
+			t.Fatalf("discover: %v %d", err, len(list))
+		}
+		if list[0].Stale {
+			t.Fatalf("fetch=%v: unexpected stale", fetch)
+		}
+		out, _ := git(clone, "branch", "-r", "--list", "origin/other")
+		if has := out != ""; has != fetch {
+			t.Fatalf("fetch=%v: origin/other present=%v", fetch, has)
+		}
+	}
+}
+
+func TestFetchFailureMarksStale(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(root, "app")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run(t, repo, "init", "-b", "main")
+	write(t, filepath.Join(repo, "readme"))
+	run(t, repo, "add", ".")
+	run(t, repo, "commit", "-m", "first")
+	run(t, repo, "remote", "add", "origin", filepath.Join(root, "missing"))
+
+	for _, fetch := range []bool{false, true} {
+		list, err := Discover(root, 3, fetch)
+		if err != nil || len(list) != 1 {
+			t.Fatalf("discover: %v %d", err, len(list))
+		}
+		if list[0].Stale != fetch {
+			t.Fatalf("fetch=%v: stale=%v", fetch, list[0].Stale)
+		}
 	}
 }

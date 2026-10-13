@@ -46,6 +46,7 @@ bonsai [OPTIONS] [PATH]
 | `-s`, `--min-size <SIZE>` | `0` | Only show worktrees at least this large (`500M`, `2G`) |
 | `-n`, `--dry-run` | | Go through the removal flow without removing anything |
 | `-f`, `--force` | | Do not require typing `DELETE` to remove dirty worktrees |
+| `--no-fetch` | | Do not fetch remotes before scanning. Status may be stale |
 | `--plain` | | Print a plain table instead of opening the TUI |
 | `--json` | | Print worktree metadata as JSON |
 | `-v`, `--version` | | Print the version |
@@ -76,6 +77,14 @@ bonsai [OPTIONS] [PATH]
 | `dirty` | Uncommitted changes or untracked files |
 
 The base branch is `origin/HEAD` when it is set, otherwise `main` or `master`. A branch is compared with both the remote and the local copy of the base. Squash and rebase merges rewrite commits, so they show up as `N ahead` until the remote branch is deleted and fetched with `git fetch --prune`, at which point they become `gone`.
+
+## Fetching
+
+Merged, `gone` and `N ahead` are computed from the local copy of the remote branches, which is only as fresh as your last fetch. To avoid showing stale or wrong status, bonsai runs `git fetch --all --prune` on every repository before it scans (once per repository, 60 second timeout, never prompting for credentials). Repositories without remotes are skipped.
+
+If a fetch fails (offline, expired credentials, timeout), bonsai still lists the worktrees, but warns that status may be stale: a yellow note in the TUI header, a message on stderr for `--plain` and `--json`, and `"stale": true` on the affected entries in JSON output.
+
+Pass `--no-fetch` to skip fetching, for offline use or very large repositories. Status then reflects your last manual fetch.
 
 ## How it works
 
