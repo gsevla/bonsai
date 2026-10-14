@@ -212,3 +212,48 @@ func TestFetchFailureMarksStale(t *testing.T) {
 		}
 	}
 }
+
+func TestSquashMerged(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(root, "app")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run(t, repo, "init", "-b", "main")
+	write(t, filepath.Join(repo, "readme"))
+	run(t, repo, "add", ".")
+	run(t, repo, "commit", "-m", "first")
+
+	feature := filepath.Join(root, "app-feature")
+	run(t, repo, "worktree", "add", "-b", "feat/squash", feature)
+	write(t, filepath.Join(feature, "one"))
+	run(t, feature, "add", ".")
+	run(t, feature, "commit", "-m", "one")
+	write(t, filepath.Join(feature, "two"))
+	run(t, feature, "add", ".")
+	run(t, feature, "commit", "-m", "two")
+
+	run(t, repo, "merge", "--squash", "feat/squash")
+	run(t, repo, "commit", "-m", "squash feat")
+	write(t, filepath.Join(repo, "later"))
+	run(t, repo, "add", ".")
+	run(t, repo, "commit", "-m", "later")
+
+	list, err := Discover(root, 5, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, w := range list {
+		if w.Branch != "feat/squash" {
+			continue
+		}
+		if !w.Merged || w.Ahead != 2 || w.Status() != "merged" {
+			t.Errorf("expected squash-merged worktree, got %+v", w)
+		}
+		return
+	}
+	t.Fatal("feat/squash worktree not found")
+}

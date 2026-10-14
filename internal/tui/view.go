@@ -84,13 +84,14 @@ func (m model) listView() string {
 			if index == m.cursor {
 				pointer = "❯"
 			}
-			disk := "…"
+			disk, modified := "…", "…"
 			if w.Measured {
 				disk = format.Size(w.Size)
+				modified = format.Ago(w.Modified, now)
 			}
 			status := w.Status()
 			b.WriteString(style.Render(" " + mark + " " + pointer + " " + fit(w.Repo, repoWidth) + "  " + fit(w.Name(), nameWidth) + "  " +
-				fmt.Sprintf("%*s", diskWidth, disk) + "  " + fit(format.Ago(w.Modified, now), modifiedWidth) + "  "))
+				fmt.Sprintf("%*s", diskWidth, disk) + "  " + fit(modified, modifiedWidth) + "  "))
 			b.WriteString(statusStyle(w, style).Render(status))
 		} else if line == 0 && m.mode != modeScanning {
 			b.WriteString(faintStyle.Render("   No worktrees found."))
