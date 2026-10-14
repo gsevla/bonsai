@@ -311,6 +311,7 @@ func markMerged(common string, list []*Worktree) {
 		}
 		branches[fields[0]] = s
 	}
+	var candidates []*Worktree
 	for _, w := range list {
 		s, ok := branches[w.Branch]
 		if !ok || w.Branch == "" {
@@ -320,7 +321,55 @@ func markMerged(common string, list []*Worktree) {
 		w.Gone = s.gone
 		w.Merged = s.ahead == 0
 		w.Ahead = max(s.ahead, 0)
+		if s.ahead > 0 && !w.Base {
+			candidates = append(candidates, w)
+		}
 	}
+	squashed := make([]bool, len(candidates))
+	limit := make(chan struct{}, runtime.NumCPU())
+	var wg sync.WaitGroup
+	for i, w := range candidates {
+		wg.Go(func() {
+			limit <- struct{}{}
+			squashed[i] = squashMerged(common, w.Branch, refs)
+			<-limit
+		})
+	}
+	wg.Wait()
+	for i, w := range candidates {
+		w.Merged = squashed[i]
+	}
+}
+
+func squashMerged(common, branch string, refs []string) bool {
+	tip := "refs/heads/" + branch
+	for _, base := range refs {
+		mergeBase, err := git(common, "merge-base", base, tip)
+		if err != nil {
+			continue
+		}
+		synthetic, err := git(common, "-c", "user.name=bonsai", "-c", "user.email=bonsai@localhost", "commit-tree", tip+"^{tree}", "-p", strings.TrimSpace(mergeBase), "-m", "_")
+		if err != nil {
+			continue
+		}
+		out, err := git(common, "cherry", base, strings.TrimSpace(synthetic))
+		if err != nil {
+			continue
+		}
+		if equivalent(out) {
+			return true
+		}
+	}
+	return false
+}
+
+func equivalent(out string) bool {
+	for line := range strings.Lines(out) {
+		if !strings.HasPrefix(line, "-") {
+			return false
+		}
+	}
+	return true
 }
 
 func markCommitted(common string, list []*Worktree) {
