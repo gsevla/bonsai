@@ -21,6 +21,7 @@ type Options struct {
 	Filter  scan.Filter
 	DryRun  bool
 	Force   bool
+	NoFetch bool
 	Version string
 }
 
@@ -94,7 +95,7 @@ func Run(opts Options) error {
 
 func (m model) Init() tea.Cmd {
 	return func() tea.Msg {
-		list, err := scan.Discover(m.opts.Root, m.opts.Depth)
+		list, err := scan.Discover(m.opts.Root, m.opts.Depth, !m.opts.NoFetch)
 		return discoveredMsg{list, err}
 	}
 }

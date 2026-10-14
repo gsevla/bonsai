@@ -107,6 +107,9 @@ func (m model) summary() string {
 		return redStyle.Render(m.err.Error())
 	}
 	if m.mode == modeScanning {
+		if !m.opts.NoFetch {
+			return "Fetching remotes and scanning for repositories…"
+		}
 		return "Scanning for repositories…"
 	}
 	repos := map[string]bool{}
@@ -125,7 +128,20 @@ func (m model) summary() string {
 	if m.pending > 0 {
 		text += faintStyle.Render(fmt.Sprintf(" · measuring %d/%d", len(m.all)-m.pending, len(m.all)))
 	}
+	if stale := m.staleRepos(); stale > 0 {
+		text += yellowStyle.Render(fmt.Sprintf(" · fetch failed for %d, status may be stale", stale))
+	}
 	return text
+}
+
+func (m model) staleRepos() int {
+	repos := map[string]bool{}
+	for _, w := range m.all {
+		if w.Stale {
+			repos[w.RepoDir] = true
+		}
+	}
+	return len(repos)
 }
 
 func (m model) footer() string {

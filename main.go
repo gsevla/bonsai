@@ -30,6 +30,7 @@ Options:
   -s, --min-size <SIZE>  Only show worktrees at least this large (500M, 2G)
   -n, --dry-run          Go through the removal flow without removing anything
   -f, --force            Do not require typing DELETE to remove dirty worktrees
+      --no-fetch         Do not fetch remotes before scanning (status may be stale)
       --plain            Print a plain table instead of opening the TUI
       --json             Print worktree metadata as JSON
   -h, --help             Print this help
@@ -46,7 +47,7 @@ func main() {
 func run(args []string) error {
 	var path, minSize string
 	var depth, minAge int
-	var dryRun, force, plain, asJSON, showVersion bool
+	var dryRun, force, plain, asJSON, showVersion, noFetch bool
 
 	flags := flag.NewFlagSet("bonsai", flag.ContinueOnError)
 	flags.Usage = func() { fmt.Fprint(flags.Output(), usage) }
@@ -71,6 +72,7 @@ func run(args []string) error {
 	for _, name := range []string{"v", "version"} {
 		flags.BoolVar(&showVersion, name, false, "")
 	}
+	flags.BoolVar(&noFetch, "no-fetch", false, "")
 	flags.BoolVar(&plain, "plain", false, "")
 	flags.BoolVar(&asJSON, "json", false, "")
 	if err := flags.Parse(args); err != nil {
@@ -105,15 +107,25 @@ func run(args []string) error {
 			Filter:  filter,
 			DryRun:  dryRun,
 			Force:   force,
+			NoFetch: noFetch,
 			Version: version,
 		})
 	}
 
-	found, err := scan.Discover(path, depth)
+	found, err := scan.Discover(path, depth, !noFetch)
 	if err != nil {
 		return err
 	}
 	scan.MeasureAll(found)
+	stale := map[string]bool{}
+	for _, w := range found {
+		if w.Stale {
+			stale[w.RepoDir] = true
+		}
+	}
+	if len(stale) > 0 {
+		fmt.Fprintf(os.Stderr, "bonsai: fetch failed for %d repositories, status may be stale\n", len(stale))
+	}
 	now := time.Now()
 	list := []*scan.Worktree{}
 	for _, w := range found {

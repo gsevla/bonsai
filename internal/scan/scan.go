@@ -29,6 +29,7 @@ type Worktree struct {
 	Gone     bool      `json:"upstream_gone"`
 	Ahead    int       `json:"ahead"`
 	Dirty    bool      `json:"dirty"`
+	Stale    bool      `json:"stale,omitempty"`
 	Measured bool      `json:"-"`
 }
 
@@ -100,7 +101,7 @@ func (w *Worktree) Apply(m Measurement) {
 	w.Measured = true
 }
 
-func Discover(root string, depth int) ([]*Worktree, error) {
+func Discover(root string, depth int, fetch bool) ([]*Worktree, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -128,7 +129,7 @@ func Discover(root string, depth int) ([]*Worktree, error) {
 	results := make([][]*Worktree, len(repos))
 	var wg sync.WaitGroup
 	for i, common := range repos {
-		wg.Go(func() { results[i] = loadRepo(common) })
+		wg.Go(func() { results[i] = loadRepo(common, fetch) })
 	}
 	wg.Wait()
 	var all []*Worktree
@@ -222,7 +223,8 @@ func repoName(common string) string {
 	return strings.TrimSuffix(name, ".git")
 }
 
-func loadRepo(common string) []*Worktree {
+func loadRepo(common string, fetch bool) []*Worktree {
+	stale := fetch && !Fetch(common)
 	out, err := git(common, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return nil
@@ -253,6 +255,9 @@ func loadRepo(common string) []*Worktree {
 		if w.Path != "" {
 			list = append(list, w)
 		}
+	}
+	for _, w := range list {
+		w.Stale = stale
 	}
 	markMerged(common, list)
 	markCommitted(common, list)
